@@ -39,23 +39,31 @@ class NetatmoError(Exception):
 # Config
 # --------------------------------------------------------------------------
 def load_env():
-    """Charge les variables du fichier .env (format KEY=VALUE)."""
+    """Charge CLIENT_ID / CLIENT_SECRET / REFRESH_TOKEN.
+
+    Priorité aux variables d'environnement (NETATMO_* ou nom brut) — pratique en
+    CI (GitHub Actions) ; sinon lecture du fichier .env local.
+    """
     cfg = {}
-    if not os.path.exists(ENV_PATH):
-        raise NetatmoError(
-            "Fichier .env introuvable. Copie .env.example en .env et remplis "
-            "CLIENT_ID / CLIENT_SECRET / REFRESH_TOKEN."
-        )
-    with open(ENV_PATH, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, val = line.partition("=")
-            cfg[key.strip()] = val.strip().strip('"').strip("'")
+    if os.path.exists(ENV_PATH):
+        with open(ENV_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                cfg[key.strip()] = val.strip().strip('"').strip("'")
+    # L'environnement l'emporte (NETATMO_CLIENT_ID ou CLIENT_ID)
+    for req in ("CLIENT_ID", "CLIENT_SECRET", "REFRESH_TOKEN"):
+        env_val = os.environ.get("NETATMO_" + req) or os.environ.get(req)
+        if env_val:
+            cfg[req] = env_val.strip()
     for req in ("CLIENT_ID", "CLIENT_SECRET", "REFRESH_TOKEN"):
         if not cfg.get(req):
-            raise NetatmoError(f"Variable manquante dans .env : {req}")
+            raise NetatmoError(
+                f"Clé manquante : {req}. Renseigne .env en local, ou les secrets "
+                f"NETATMO_{req} en CI."
+            )
     return cfg
 
 
