@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Climat · Netatmo</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌤️</text></svg>" />
+  <script>window.NETATMO_STATIC = true;</script>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0d0d0d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Climat">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}</script>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="top-left">
+        <h1 id="station-name">Climat</h1>
+        <p class="sub" id="updated">Chargement…</p>
+      </div>
+      <div class="top-right">
+        <select id="station-select" class="station-select hidden" title="Choisir une station"></select>
+        <button id="refresh" class="btn" title="Rafraîchir">↻</button>
+        <button id="theme" class="btn" title="Thème clair/sombre">◐</button>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs">
+      <button data-tab="overview" class="active">Vue d'ensemble</button>
+      <button data-tab="temperature">Température</button>
+      <button data-tab="rain">Pluie</button>
+      <button data-tab="wind">Vent</button>
+      <button data-tab="climate">Climat</button>
+      <button data-tab="search">Recherche</button>
+    </nav>
+
+    <div id="banner" class="banner hidden"></div>
+
+    <!-- ==================== VUE D'ENSEMBLE ==================== -->
+    <main id="tab-overview" class="tab-page">
+      <section class="tiles">
+        <article class="tile tile-hero" id="tile-outdoor">
+          <div class="tile-head">Extérieur <span class="trend" id="out-trend"></span></div>
+          <div class="tile-value"><span id="out-temp">—</span><span class="unit">°C</span></div>
+          <div class="tile-foot"><span id="out-hum">—</span>% humidité</div>
+        </article>
+
+        <article class="tile" id="tile-wind">
+          <div class="tile-head">Vent</div>
+          <div class="wind-row">
+            <div class="compass" id="compass">
+              <svg viewBox="0 0 100 100" aria-hidden="true">
+                <circle cx="50" cy="50" r="46" class="compass-ring" />
+                <line x1="50" y1="8" x2="50" y2="16" class="tick" />
+                <line x1="50" y1="84" x2="50" y2="92" class="tick" />
+                <line x1="8" y1="50" x2="16" y2="50" class="tick" />
+                <line x1="84" y1="50" x2="92" y2="50" class="tick" />
+                <text x="50" y="22" class="compass-label">N</text>
+                <text x="50" y="83" class="compass-label">S</text>
+                <text x="80" y="53" class="compass-label">E</text>
+                <text x="20" y="53" class="compass-label">O</text>
+                <g id="needle" transform="rotate(0 50 50)">
+                  <polygon points="50,18 45,52 55,52" class="needle-main" />
+                  <polygon points="50,82 45,52 55,52" class="needle-tail" />
+                </g>
+                <circle cx="50" cy="50" r="4" class="needle-hub" />
+              </svg>
+            </div>
+            <div class="wind-nums">
+              <div><span class="big" id="wind-str">—</span> <span class="unit">km/h</span></div>
+              <div class="mini">Rafale <strong id="wind-gust">—</strong> km/h</div>
+              <div class="mini">Max jour <strong id="wind-max">—</strong> km/h</div>
+              <div class="mini" id="wind-dir">—</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="tile" id="tile-rain">
+          <div class="tile-head">Pluie</div>
+          <div class="tile-value"><span id="rain-day">—</span><span class="unit">mm</span></div>
+          <div class="tile-foot">aujourd'hui · <span id="rain-hour">—</span> mm / h</div>
+        </article>
+      </section>
+
+      <section class="minmax">
+        <h2>Températures extérieures — min / max</h2>
+        <div class="minmax-grid">
+          <div class="mm-card">
+            <div class="mm-title">Aujourd'hui</div>
+            <div class="mm-row"><span class="dot dot-min"></span> Min <b id="d-min">—</b>°C <em id="d-min-t"></em></div>
+            <div class="mm-row"><span class="dot dot-max"></span> Max <b id="d-max">—</b>°C <em id="d-max-t"></em></div>
+          </div>
+          <div class="mm-card">
+            <div class="mm-title">Ce mois</div>
+            <div class="mm-row"><span class="dot dot-min"></span> Min <b id="m-min">—</b>°C <em id="m-min-t"></em></div>
+            <div class="mm-row"><span class="dot dot-max"></span> Max <b id="m-max">—</b>°C <em id="m-max-t"></em></div>
+          </div>
+          <div class="mm-card">
+            <div class="mm-title">Cette année</div>
+            <div class="mm-row"><span class="dot dot-min"></span> Min <b id="y-min">—</b>°C <em id="y-min-t"></em></div>
+            <div class="mm-row"><span class="dot dot-max"></span> Max <b id="y-max">—</b>°C <em id="y-max-t"></em></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="chart-section">
+        <div class="chart-head">
+          <h2>Évolution — <span id="range-label">30 derniers jours</span></h2>
+          <div class="range-btns" id="range-btns">
+            <button data-days="7">7 j</button>
+            <button data-days="30" class="active">30 j</button>
+            <button data-days="90">90 j</button>
+            <button data-days="365">1 an</button>
+          </div>
+        </div>
+        <div class="legend">
+          <span><span class="swatch sw-max"></span> Max</span>
+          <span><span class="swatch sw-min"></span> Min</span>
+          <span><span class="swatch sw-rain"></span> Pluie</span>
+        </div>
+        <div id="chart" class="chart"></div>
+      </section>
+
+      <!-- Intérieur : accessible mais discret, en bas -->
+      <details class="indoor-details">
+        <summary>Intérieur</summary>
+        <div class="indoor-line">
+          <span><b id="in-temp">—</b> °C</span>
+          <span><b id="in-hum">—</b> % humidité</span>
+          <span>CO₂ <b id="in-co2">—</b> ppm</span>
+          <span><b id="in-pres">—</b> mbar</span>
+        </div>
+      </details>
+    </main>
+
+    <!-- ==================== TEMPÉRATURE ==================== -->
+    <main id="tab-temperature" class="tab-page hidden"></main>
+    <!-- ==================== PLUIE ==================== -->
+    <main id="tab-rain" class="tab-page hidden"></main>
+    <!-- ==================== VENT ==================== -->
+    <main id="tab-wind" class="tab-page hidden"></main>
+    <!-- ==================== CLIMAT ==================== -->
+    <main id="tab-climate" class="tab-page hidden"></main>
+
+    <!-- ==================== RECHERCHE ==================== -->
+    <main id="tab-search" class="tab-page hidden">
+      <section class="search-box">
+        <input type="text" id="search-input" placeholder="Ex : jour le plus chaud · les plus froids en 2023 · compare les 12 juin · jours les plus pluvieux…" />
+        <button id="search-go" class="btn-primary">Chercher</button>
+      </section>
+      <div class="search-hints">
+        <button class="hint">jour le plus chaud</button>
+        <button class="hint">jour le plus froid</button>
+        <button class="hint">jours les plus pluvieux</button>
+        <button class="hint">plus grosses rafales</button>
+        <button class="hint">compare les 12 juin</button>
+        <button class="hint">plus grosses amplitudes</button>
+      </div>
+      <div id="search-results"></div>
+    </main>
+
+    <footer class="foot">
+      Données <a href="https://www.netatmo.com" target="_blank" rel="noopener">Netatmo</a> ·
+      <span id="db-note">—</span>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
