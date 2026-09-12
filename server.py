@@ -48,10 +48,46 @@ def _run_sync(reason):
         with open(SYNC_MARKER, "w") as f:
             f.write(str(int(time.time())))
         _CACHE.clear()  # les pages refléteront les nouvelles données
+        _publish()      # régénère le site statique + pousse sur GitHub (si configuré)
     except Exception as e:
         print(f"⚠️ Synchro échouée : {e}")
     finally:
         _sync_lock.release()
+
+
+def _publish():
+    """Régénère docs/ et pousse sur GitHub si un dépôt distant est configuré.
+    Jamais bloquant : toute erreur est seulement signalée."""
+    try:
+        import export
+        export.export_all()
+    except Exception as e:
+        print(f"⚠️ Export statique échoué : {e}")
+        return
+    try:
+        import subprocess
+        has_remote = subprocess.run(
+            ["git", "remote"], cwd=BASE_DIR, capture_output=True, text=True
+        ).stdout.strip()
+        if not has_remote:
+            return  # pas encore relié à GitHub — rien à pousser
+        subprocess.run(["git", "add", "docs"], cwd=BASE_DIR, check=False)
+        changed = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"], cwd=BASE_DIR
+        ).returncode
+        if changed == 0:
+            return  # rien de neuf
+        subprocess.run(
+            ["git", "commit", "-q", "-m", "maj données " + time.strftime("%Y-%m-%d %H:%M")],
+            cwd=BASE_DIR, check=False,
+        )
+        r = subprocess.run(["git", "push", "-q"], cwd=BASE_DIR, capture_output=True, text=True)
+        if r.returncode == 0:
+            print("↥ Site public mis à jour sur GitHub.")
+        else:
+            print(f"⚠️ Push GitHub impossible (données commit localement) : {r.stderr.strip()[:200]}")
+    except Exception as e:
+        print(f"⚠️ Publication GitHub échouée : {e}")
 
 
 def _auto_sync_loop():
