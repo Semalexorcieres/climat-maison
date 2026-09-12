@@ -102,6 +102,7 @@ function smartFetch(u) {
 
 // ---------- Stations ----------
 let currentStation = localStorage.getItem("station") || "";
+let lastDashboard = null; // dernier instantané (pour la vue "jour")
 
 async function loadStations() {
   try {
@@ -385,20 +386,110 @@ function windRose(container, rose) {
 // ==========================================================================
 // PAGES DE STATS
 // ==========================================================================
-function renderTemperaturePage(page, d) {
-  const yearsCount = d.yearly.length;
-  const hottest = d.hottest_days[0], coldest = d.coldest_days[0];
-  page.innerHTML = `
-    <section class="stat-section">
-      <div class="stat-grid">
-        ${statTile("Relevés depuis", fmtDay(d.since), "", yearsCount + " années de données")}
-        ${statTile("Record de chaleur", fmt(hottest?.value), "°C", fmtDay(hottest?.day))}
-        ${statTile("Record de froid", fmt(coldest?.value), "°C", fmtDay(coldest?.day))}
-      </div>
-    </section>
+// Graphe band min/max compact (semaine / mois) à partir des relevés journaliers
+function tempBand(host, rows) {
+  host.innerHTML = "";
+  rows = (rows || []).filter((r) => r.tmin != null || r.tmax != null);
+  if (rows.length < 2) { host.innerHTML = "<p class='loading'>Pas assez de données.</p>"; return; }
+  const W = 1000, H = 300, m = { top: 16, right: 14, bottom: 30, left: 34 };
+  const iw = W - m.left - m.right, ih = H - m.top - m.bottom;
+  const mins = rows.map((r) => r.tmin), maxs = rows.map((r) => r.tmax);
+  const vals = mins.concat(maxs).filter((v) => v != null);
+  let lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  const pad = Math.max(1, (hi - lo) * 0.12); lo = Math.floor(lo - pad); hi = Math.ceil(hi + pad);
+  const n = rows.length;
+  const x = (i) => m.left + (n === 1 ? iw / 2 : (i / (n - 1)) * iw);
+  const y = (v) => m.top + ih - ((v - lo) / (hi - lo)) * ih;
+  const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  for (let t = 0; t <= 4; t++) {
+    const val = lo + (hi - lo) * t / 4;
+    line(svg, m.left, y(val), W - m.right, y(val), "gridline");
+    text(svg, m.left - 8, y(val) + 4, Math.round(val) + "°", "axis-text", "end");
+  }
+  let top = "", bot = "";
+  rows.forEach((r, i) => { if (r.tmax != null) top += `${x(i)},${y(r.tmax)} `; });
+  for (let i = n - 1; i >= 0; i--) { if (rows[i].tmin != null) bot += `${x(i)},${y(rows[i].tmin)} `; }
+  if (top && bot) { const p = document.createElementNS(NS, "polygon"); p.setAttribute("points", top + bot); p.setAttribute("class", "band"); svg.appendChild(p); }
+  path(svg, maxs, x, y, "line-max"); path(svg, mins, x, y, "line-min");
+  const step = Math.max(1, Math.ceil(n / 6));
+  for (let i = 0; i < n; i += step) text(svg, x(i), H - 8, fmtDayShort(rows[i].day), "axis-text", "middle");
+  host.appendChild(svg);
+}
 
-    <section class="stat-section">
-      ${sectionTitle("Bilan par année")}
+function weekMonthStats(rows) {
+  let min = null, max = null, sum = 0, cnt = 0;
+  rows.forEach((r) => {
+    if (r.tmin != null && (min === null || r.tmin < min.v)) min = { v: r.tmin, day: r.day };
+    if (r.tmax != null && (max === null || r.tmax > max.v)) max = { v: r.tmax, day: r.day };
+    if (r.tavg != null) { sum += r.tavg; cnt++; }
+  });
+  return { avg: cnt ? Math.round(sum / cnt * 10) / 10 : null, min, max };
+}
+function periodStatGrid(s, title) {
+  return `<section class="stat-section">${sectionTitle(title)}
+    <div class="stat-grid">
+      ${statTile("Moyenne", fmt(s.avg), "°C")}
+      ${statTile("Le plus froid", fmt(s.min && s.min.v), "°C", s.min ? fmtDayShort(s.min.day) : "")}
+      ${statTile("Le plus chaud", fmt(s.max && s.max.v), "°C", s.max ? fmtDayShort(s.max.day) : "")}
+    </div></section>`;
+}
+
+function renderDay(host, tstats) {
+  const o = (lastDashboard && lastDashboard.current && lastDashboard.current.outdoor) || {};
+  const mn = o.min_today, mx = o.max_today;
+  const amp = (mn != null && mx != null) ? Math.round((mx - mn) * 10) / 10 : null;
+  const mm = String(new Date().getMonth() + 1).padStart(2, "0");
+  const clim = (tstats.climatology || []).find((c) => c.month === mm);
+  host.innerHTML = `
+    <section class="day-hero">
+      <div class="day-cur">
+        <div class="label">Actuel</div>
+        <div class="v">${fmt(o.temp)}<span class="u">°C</span> ${trendArrow(o.trend)}</div>
+        <div class="sub">${fmt(o.humidity, 0)}% humidité</div>
+      </div>
+      <div class="day-mm">
+        <div class="day-x day-x-min">${ic("snowflake")}<div>
+          <div class="label">Min du jour</div><div class="v">${fmt(mn)}°</div>
+          <div class="sub">${o.min_today_ts ? "à " + fmtTime(o.min_today_ts) : ""}</div></div></div>
+        <div class="day-x day-x-max">${ic("flame")}<div>
+          <div class="label">Max du jour</div><div class="v">${fmt(mx)}°</div>
+          <div class="sub">${o.max_today_ts ? "à " + fmtTime(o.max_today_ts) : ""}</div></div></div>
+      </div>
+      ${amp != null ? `<div class="day-amp">Amplitude du jour <b>${amp}°</b></div>` : ""}
+      ${clim ? `<div class="day-normal">Normale de ${MONTHS_SHORT[parseInt(mm, 10) - 1]} : min <b>${fmt(clim.avg_min)}°</b> · max <b>${fmt(clim.avg_max)}°</b></div>` : ""}
+    </section>`;
+  paintIcons(host);
+}
+
+function renderWeek(host, rows) {
+  const last = rows.slice(-7);
+  host.innerHTML = periodStatGrid(weekMonthStats(last), "Cette semaine (7 derniers jours)") +
+    `<section class="stat-section">${sectionTitle("Min / max jour par jour")}<div class="chart" id="t-band"></div></section>`;
+  tempBand(host.querySelector("#t-band"), last);
+}
+
+function renderMonth(host, rows, d) {
+  const ym = new Date().toISOString().slice(0, 7);
+  let cur = rows.filter((r) => r.day.slice(0, 7) === ym);
+  if (cur.length < 2) cur = rows.slice(-30);
+  const s = weekMonthStats(cur);
+  // Comparaison de la moyenne du mois avec les mêmes mois des années passées
+  const mm = ym.slice(5, 7);
+  const sameMonth = (d.monthly || []).filter((r) => r.month === mm && r.year !== ym.slice(0, 4) && r.avg != null);
+  let cmp = "";
+  if (s.avg != null && sameMonth.length) {
+    const past = sameMonth.reduce((a, b) => a + b.avg, 0) / sameMonth.length;
+    const diff = Math.round((s.avg - past) * 10) / 10;
+    cmp = `<div class="day-normal">Moyenne du mois <b>${fmt(s.avg)}°</b> · ${diff >= 0 ? "+" : ""}${diff}° vs les ${MONTHS_SHORT[parseInt(mm, 10) - 1]} passés (${fmt(past)}°)</div>`;
+  }
+  host.innerHTML = periodStatGrid(s, "Ce mois-ci") + cmp +
+    `<section class="stat-section">${sectionTitle("Min / max jour par jour")}<div class="chart" id="t-band"></div></section>`;
+  tempBand(host.querySelector("#t-band"), cur);
+}
+
+function renderYear(host, d) {
+  host.innerHTML = `
+    <section class="stat-section">${sectionTitle("Bilan par année")}
       <div class="table-wrap"><table class="data"><thead>
         <tr><th>Année</th><th>Moyenne</th><th>Min</th><th>le</th><th>Max</th><th>le</th><th>Jours</th></tr>
       </thead><tbody>
@@ -406,59 +497,74 @@ function renderTemperaturePage(page, d) {
           <td class="neg">${fmt(y.min)}°</td><td>${fmtDay(y.min_day)}</td>
           <td class="pos">${fmt(y.max)}°</td><td>${fmtDay(y.max_day)}</td>
           <td>${y.days}</td></tr>`).join("")}
-      </tbody></table></div>
-    </section>
-
-    <section class="stat-section">
-      ${sectionTitle("Comparaison des années — moyenne mensuelle")}
-      <div class="chart" id="t-multiline"></div>
-    </section>
-
-    <section class="stat-section">
-      ${sectionTitle("Moyennes mensuelles par année")}
+      </tbody></table></div></section>
+    <section class="stat-section">${sectionTitle("Comparaison des années — moyenne mensuelle")}
+      <div class="chart" id="t-multiline"></div></section>
+    <section class="stat-section">${sectionTitle("Moyennes mensuelles par année")}
       <div class="year-btns" style="display:flex;gap:4px;margin-bottom:8px">
         <button class="active" data-f="avg">Moyenne</button>
         <button data-f="min">Min</button>
         <button data-f="max">Max</button>
       </div>
-      <div id="t-matrix"></div>
-    </section>
+      <div id="t-matrix"></div></section>`;
+  multiLineChart(host.querySelector("#t-multiline"), d.monthly, "avg", "°");
+  const matrixHost = host.querySelector("#t-matrix");
+  const drawMatrix = (f) => { matrixHost.innerHTML = matrixTable(d.monthly, f, { highlight: f === "min" ? "min" : "max" }); };
+  drawMatrix("avg");
+  host.querySelector(".year-btns").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    host.querySelectorAll(".year-btns button").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    drawMatrix(b.dataset.f);
+  });
+}
 
-    <section class="stat-section two-cols">
-      <div>
-        ${sectionTitle("Top 10 jours les plus chauds")}
-        <div class="table-wrap"><table class="data"><thead><tr><th>Date</th><th>Max</th></tr></thead>
-        <tbody>${d.hottest_days.map((r) => `<tr><td>${fmtDay(r.day)}</td><td class="pos">${fmt(r.value)}°</td></tr>`).join("")}</tbody></table></div>
-      </div>
-      <div>
-        ${sectionTitle("Top 10 jours les plus froids")}
-        <div class="table-wrap"><table class="data"><thead><tr><th>Date</th><th>Min</th></tr></thead>
-        <tbody>${d.coldest_days.map((r) => `<tr><td>${fmtDay(r.day)}</td><td class="neg">${fmt(r.value)}°</td></tr>`).join("")}</tbody></table></div>
+function renderTemperaturePage(page, d) {
+  const yearsCount = d.yearly.length;
+  const hottest = d.hottest_days[0], coldest = d.coldest_days[0];
+  page.innerHTML = `
+    <div class="seg" id="t-seg">
+      <button data-p="day" class="active">Jour</button>
+      <button data-p="week">Semaine</button>
+      <button data-p="month">Mois</button>
+      <button data-p="year">Année</button>
+    </div>
+    <div id="t-period"></div>
+
+    <section class="stat-section">
+      ${sectionTitle("Records absolus")}
+      <div class="stat-grid">
+        ${statTile("Record de chaleur", fmt(hottest?.value), "°C", fmtDay(hottest?.day))}
+        ${statTile("Record de froid", fmt(coldest?.value), "°C", fmtDay(coldest?.day))}
       </div>
     </section>
-
     <section class="stat-section">
       ${sectionTitle("Climatologie mensuelle (toutes années)")}
       <div class="table-wrap"><table class="data"><thead>
-        <tr><th>Mois</th><th>Moy</th><th>Moy des min</th><th>Moy des max</th><th>Record min</th><th>Record max</th></tr>
+        <tr><th>Mois</th><th>Moy</th><th>Moy min</th><th>Moy max</th><th>Record min</th><th>Record max</th></tr>
       </thead><tbody>
         ${d.climatology.map((c) => `<tr><td>${MONTHS_SHORT[parseInt(c.month, 10) - 1]}</td>
           <td>${fmt(c.avg)}°</td><td>${fmt(c.avg_min)}°</td><td>${fmt(c.avg_max)}°</td>
           <td class="neg">${fmt(c.record_min)}°</td><td class="pos">${fmt(c.record_max)}°</td></tr>`).join("")}
       </tbody></table></div>
-    </section>`;
+    </section>
+    <p class="since-note">Relevés depuis le ${fmtDay(d.since)} · ${yearsCount} années de données</p>`;
 
-  multiLineChart(page.querySelector("#t-multiline"), d.monthly, "avg", "°");
-  const matrixHost = page.querySelector("#t-matrix");
-  const drawMatrix = (f) => {
-    matrixHost.innerHTML = matrixTable(d.monthly, f, { highlight: f === "min" ? "min" : "max" });
+  const period = page.querySelector("#t-period");
+  const renderPeriod = async (p) => {
+    if (p === "day") return renderDay(period, d);
+    if (p === "year") return renderYear(period, d);
+    period.innerHTML = "<p class='loading'>Chargement…</p>";
+    const rows = await loadDaily(currentStation);
+    if (p === "week") return renderWeek(period, rows);
+    if (p === "month") return renderMonth(period, rows, d);
   };
-  drawMatrix("avg");
-  page.querySelector(".year-btns").addEventListener("click", (e) => {
+  renderPeriod("day");
+  page.querySelector("#t-seg").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
-    page.querySelectorAll(".year-btns button").forEach((x) => x.classList.remove("active"));
+    page.querySelectorAll("#t-seg button").forEach((x) => x.classList.remove("active"));
     b.classList.add("active");
-    drawMatrix(b.dataset.f);
+    renderPeriod(b.dataset.p);
   });
 }
 
@@ -780,6 +886,7 @@ function handleError(msg) {
 }
 
 function render(d) {
+  lastDashboard = d;
   $("station-name").textContent = (d.station_name || "Climat").replace(/\s*\([^)]*\)\s*$/, "");
   $("updated").textContent = d.updated_at ? "Mis à jour à " + fmtTime(d.updated_at) : "";
 

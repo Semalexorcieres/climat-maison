@@ -39,6 +39,7 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
+html, body { max-width: 100%; overflow-x: hidden; }
 body {
   margin: 0;
   background: var(--page);
@@ -313,6 +314,11 @@ td.best { color: var(--ink); font-weight: 600; }
   .wrap { padding: max(16px, env(safe-area-inset-top)) max(15px, env(safe-area-inset-left))
     calc(40px + env(safe-area-inset-bottom)) max(15px, env(safe-area-inset-right)); }
   h1 { font-size: 1.3rem; }
+  /* En-tête : titre sur une ligne, contrôles pleine largeur en dessous */
+  .top { flex-wrap: wrap; gap: 12px; }
+  .top-left { flex: 1 1 100%; }
+  .top-right { width: 100%; }
+  .station-select { flex: 1 1 auto; min-width: 0; max-width: none; }
   .tiles { grid-template-columns: 1fr; gap: 12px; margin-top: 18px; }
   .tile { min-height: 0; padding: 18px; }
   .tile-value { font-size: 2.6rem; }
@@ -327,3 +333,35 @@ td.best { color: var(--ink); font-weight: 600; }
   .line-max, .line-min { stroke-width: 3; }
   .band { opacity: .16; }
 }
+
+/* ============ Bascule de période (segmented) ============ */
+.seg { display: flex; gap: 4px; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 4px; margin: 20px 0 4px; }
+.seg button { flex: 1; appearance: none; border: none; background: none; cursor: pointer;
+  color: var(--ink-2); font-family: inherit; font-size: .88rem; font-weight: 600;
+  padding: 9px 6px; border-radius: 9px; transition: all .15s ease; }
+.seg button.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+
+/* ============ Vue "jour" ============ */
+.day-hero { display: grid; gap: 12px; margin-top: 8px; }
+.day-cur { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px; box-shadow: var(--shadow); }
+.day-cur .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 600; }
+.day-cur .v { font-size: 3rem; font-weight: 400; line-height: 1; margin-top: 6px; }
+.day-cur .u { font-size: 1.1rem; color: var(--ink-2); }
+.day-cur .sub { color: var(--ink-2); font-size: .85rem; margin-top: 8px; }
+.day-mm { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.day-x { display: flex; gap: 12px; align-items: center; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+.day-x .ic { width: 24px; height: 24px; flex: 0 0 auto; }
+.day-x-min .ic { color: var(--min); }
+.day-x-max .ic { color: var(--max); }
+.day-x .label { font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+.day-x .v { font-size: 1.7rem; font-weight: 500; line-height: 1.1; }
+.day-x .sub { font-size: .78rem; color: var(--ink-2); }
+.day-amp, .day-normal { background: var(--surface-2); border-radius: 10px; padding: 11px 14px;
+  font-size: .86rem; color: var(--ink-2); }
+.day-amp b, .day-normal b { color: var(--ink); font-weight: 600; }
+
+/* ============ Note "relevés depuis" (discrète, en bas) ============ */
+.since-note { margin-top: 28px; text-align: center; color: var(--muted); font-size: .74rem; }
