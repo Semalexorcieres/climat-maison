@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Climat · Netatmo</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌤️</text></svg>" />
@@ -30,12 +30,12 @@
     </header>
 
     <nav class="tabs" id="tabs">
-      <button data-tab="overview" class="active">Vue d'ensemble</button>
-      <button data-tab="temperature">Température</button>
-      <button data-tab="rain">Pluie</button>
-      <button data-tab="wind">Vent</button>
-      <button data-tab="climate">Climat</button>
-      <button data-tab="search">Recherche</button>
+      <button data-tab="overview" class="active" data-ic="home">Vue d'ensemble</button>
+      <button data-tab="temperature" data-ic="thermometer">Température</button>
+      <button data-tab="rain" data-ic="rain">Pluie</button>
+      <button data-tab="wind" data-ic="wind">Vent</button>
+      <button data-tab="climate" data-ic="snowflake">Climat</button>
+      <button data-tab="search" data-ic="search">Recherche</button>
     </nav>
 
     <div id="banner" class="banner hidden"></div>
@@ -43,14 +43,16 @@
     <!-- ==================== VUE D'ENSEMBLE ==================== -->
     <main id="tab-overview" class="tab-page">
       <section class="tiles">
-        <article class="tile tile-hero" id="tile-outdoor">
-          <div class="tile-head">Extérieur <span class="trend" id="out-trend"></span></div>
+        <article class="tile tile-hero tappable" id="tile-outdoor" data-goto="temperature">
+          <div class="tile-head" data-ic="thermometer">Extérieur <span class="trend" id="out-trend"></span></div>
           <div class="tile-value"><span id="out-temp">—</span><span class="unit">°C</span></div>
-          <div class="tile-foot"><span id="out-hum">—</span>% humidité</div>
+          <div class="tile-foot"><span data-ic="droplet" class="foot-ic"></span><span id="out-hum">—</span>% humidité</div>
+          <span class="go" data-ic="arrowRight"></span>
         </article>
 
-        <article class="tile" id="tile-wind">
-          <div class="tile-head">Vent</div>
+        <article class="tile tappable" id="tile-wind" data-goto="wind">
+          <div class="tile-head" data-ic="wind">Vent</div>
+          <span class="go" data-ic="arrowRight"></span>
           <div class="wind-row">
             <div class="compass" id="compass">
               <svg viewBox="0 0 100 100" aria-hidden="true">
@@ -79,15 +81,28 @@
           </div>
         </article>
 
-        <article class="tile" id="tile-rain">
-          <div class="tile-head">Pluie</div>
+        <article class="tile tappable" id="tile-rain" data-goto="rain">
+          <div class="tile-head" data-ic="rain">Pluie</div>
+          <span class="go" data-ic="arrowRight"></span>
           <div class="tile-value"><span id="rain-day">—</span><span class="unit">mm</span></div>
           <div class="tile-foot">aujourd'hui · <span id="rain-hour">—</span> mm / h</div>
+          <div class="last-rain" id="last-rain"></div>
         </article>
       </section>
 
+      <!-- Records récents / bascule de saison -->
+      <section class="recent tappable" id="recent-card" data-goto="temperature">
+        <div class="recent-head">
+          <span data-ic="trending">Records récents</span>
+          <span class="go" data-ic="arrowRight"></span>
+        </div>
+        <div class="recent-extremes" id="recent-extremes"></div>
+        <div class="season-record" id="season-record"></div>
+        <div class="thresholds" id="thresholds"></div>
+      </section>
+
       <section class="minmax">
-        <h2>Températures extérieures — min / max</h2>
+        <h2>Aujourd'hui · ce mois · cette année</h2>
         <div class="minmax-grid">
           <div class="mm-card">
             <div class="mm-title">Aujourd'hui</div>
@@ -164,8 +179,8 @@
     </main>
 
     <footer class="foot">
-      Données <a href="https://www.netatmo.com" target="_blank" rel="noopener">Netatmo</a> ·
-      <span id="db-note">—</span>
+      <div class="foot-data">Données <a href="https://www.netatmo.com" target="_blank" rel="noopener">Netatmo</a> · <span id="db-note">—</span></div>
+      <div class="signature">Made by <b>ap</b> with <span class="sig-heart" data-ic="heart"></span> lo</div>
     </footer>
   </div>
 

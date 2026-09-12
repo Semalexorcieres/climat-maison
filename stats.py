@@ -7,7 +7,7 @@ structures prêtes à afficher. Aucun appel réseau ici : tout est local.
 
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "data.db")
@@ -39,6 +39,84 @@ def _is_north(angle):
 # ==========================================================================
 # TEMPÉRATURE
 # ==========================================================================
+def _days_ago(day_str):
+    try:
+        d = datetime.strptime(day_str, "%Y-%m-%d").date()
+        return (date.today() - d).days
+    except Exception:
+        return None
+
+
+def overview_extra(station):
+    """Extrêmes récents + derniers franchissements de seuils (saison-aware)
+    + dernière pluie. Alimente la vue d'ensemble (mobile)."""
+    conn = db()
+    today = date.today()
+    # Focus : mars→août on regarde vers la chaleur ; sept→février vers le froid.
+    focus = "heat" if 3 <= today.month <= 8 else "cold"
+
+    def extreme_since(order, field, since_iso):
+        r = conn.execute(
+            f"SELECT day, {field} AS v FROM daily WHERE station=? AND day>=? "
+            f"AND {field} IS NOT NULL ORDER BY {field} {order} LIMIT 1",
+            (station, since_iso),
+        ).fetchone()
+        if not r:
+            return None
+        return {"value": r["v"], "day": r["day"], "days_ago": _days_ago(r["day"])}
+
+    win = (today - timedelta(days=60)).isoformat()
+    recent = {
+        "window_days": 60,
+        "min": extreme_since("ASC", "tmin", win),
+        "max": extreme_since("DESC", "tmax", win),
+    }
+
+    # Derniers franchissements : "dernière fois qu'il a fait ≤ X" (froid)
+    # ou "≥ X" (chaleur). Ne garde que les seuils réellement franchis un jour.
+    thresholds = []
+    if focus == "cold":
+        specs = [(x, "<=", "tmin") for x in (10, 7, 5, 3, 0, -5)]
+    else:
+        specs = [(x, ">=", "tmax") for x in (20, 25, 30, 35)]
+    for x, op, field in specs:
+        r = conn.execute(
+            f"SELECT day, {field} AS t FROM daily WHERE station=? AND {field} {op} ? "
+            f"ORDER BY day DESC LIMIT 1", (station, x),
+        ).fetchone()
+        if r:
+            thresholds.append({
+                "value": x, "op": op, "field": field,
+                "day": r["day"], "temp": r["t"], "days_ago": _days_ago(r["day"]),
+            })
+
+    # Record de la saison EN COURS
+    if focus == "cold":
+        start = date(today.year if today.month >= 8 else today.year - 1, 8, 1).isoformat()
+        rec = extreme_since("ASC", "tmin", start)
+        season_record = {"kind": "cold", "since": start, **rec} if rec else None
+    else:
+        start = date(today.year, 2, 1).isoformat()
+        rec = extreme_since("DESC", "tmax", start)
+        season_record = {"kind": "heat", "since": start, **rec} if rec else None
+
+    lr = conn.execute(
+        "SELECT day, rain FROM daily WHERE station=? AND rain>=0.5 ORDER BY day DESC LIMIT 1",
+        (station,),
+    ).fetchone()
+    last_rain = {"day": lr["day"], "mm": lr["rain"], "days_ago": _days_ago(lr["day"])} if lr else None
+
+    conn.close()
+    return {
+        "focus": focus,
+        "recent": recent,
+        "thresholds": thresholds,
+        "season_record": season_record,
+        "last_rain": last_rain,
+        "today": today.isoformat(),
+    }
+
+
 def temperature_stats(station):
     conn = db()
 

@@ -7,6 +7,39 @@ const NS = "http://www.w3.org/2000/svg";
 const YEAR_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
 const MONTHS_SHORT = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 
+// ---------- Icônes Lucide (inline SVG, sans dépendance, MIT) ----------
+const ICON_PATHS = {
+  thermometer: '<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>',
+  wind: '<path d="M12.8 19.6A2 2 0 1 0 14 16H2"/><path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"/><path d="M9.8 4.4A2 2 0 1 1 11 8H2"/>',
+  rain: '<path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/>',
+  droplet: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+  snowflake: '<line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/>',
+  flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="m17.7 17.7 1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.3 17.7-1.4 1.4"/><path d="m19.1 4.9-1.4 1.4"/>',
+  arrowDown: '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+  arrowUp: '<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>',
+  arrowRight: '<path d="m9 18 6-6-6-6"/>',
+  calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  gauge: '<path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.3 0"/>',
+  chart: '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>',
+  heart: '<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/>',
+  trending: '<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>',
+};
+function ic(name, cls) {
+  const p = ICON_PATHS[name];
+  if (!p) return "";
+  return `<svg class="ic${cls ? " " + cls : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+}
+function paintIcons(root) {
+  (root || document).querySelectorAll("[data-ic]").forEach((e) => {
+    if (e.dataset.painted) return;
+    e.innerHTML = ic(e.dataset.ic) + e.innerHTML;
+    e.dataset.painted = "1";
+  });
+}
+
 // ---------- Utilitaires ----------
 function fmt(v, d = 1) {
   if (v === null || v === undefined || Number.isNaN(v)) return "—";
@@ -58,6 +91,7 @@ function toStaticPath(u) {
   if (path === "/api/stations") return "data/stations.json";
   if (path === "/api/db-status") return "data/db-status.json";
   if (path === "/api/dashboard") return `data/dashboard/${dev}.json`;
+  if (path === "/api/overview") return `data/overview/${dev}.json`;
   if (path === "/api/series") return `data/series/${dev}_${p.get("days") || 30}.json`;
   if (path.startsWith("/api/stats/")) return `data/stats/${path.split("/").pop()}_${dev}.json`;
   return u;
@@ -746,7 +780,7 @@ function handleError(msg) {
 }
 
 function render(d) {
-  $("station-name").textContent = d.station_name || "Climat";
+  $("station-name").textContent = (d.station_name || "Climat").replace(/\s*\([^)]*\)\s*$/, "");
   $("updated").textContent = d.updated_at ? "Mis à jour à " + fmtTime(d.updated_at) : "";
 
   const c = d.current || {};
@@ -973,6 +1007,7 @@ $("station-select").addEventListener("change", (e) => {
   invalidateTabs();
   loadDashboard();
   loadSeries(currentDays);
+  loadOverviewExtra();
   const active = document.querySelector("#tabs button.active").dataset.tab;
   if (active !== "overview" && active !== "search") loadStatTab(active);
 });
@@ -993,6 +1028,86 @@ async function loadDbStatus() {
   } catch (e) { /* rien */ }
 }
 
+// ---------- Records récents / bascule de saison ----------
+function fmtDayShort(dayStr) {
+  if (!dayStr) return "—";
+  const d = new Date(dayStr + "T12:00:00");
+  const s = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  return d.getDate() === 1 ? s.replace(/^1\b/, "1er") : s;
+}
+function agoLabel(days) {
+  if (days === null || days === undefined) return "";
+  if (days <= 0) return "aujourd'hui";
+  if (days === 1) return "hier";
+  if (days < 30) return "il y a " + days + " j";
+  const m = Math.round(days / 30);
+  return "il y a " + m + " mois";
+}
+
+async function loadOverviewExtra() {
+  try {
+    const res = await smartFetch("/api/overview" + deviceParam());
+    const d = await res.json();
+    if (!res.ok || d.error) return;
+    renderOverviewExtra(d);
+  } catch (e) { /* silencieux */ }
+}
+
+function renderOverviewExtra(d) {
+  const cold = d.focus === "cold";
+  // Extrêmes récents (60 j)
+  const rmin = d.recent && d.recent.min, rmax = d.recent && d.recent.max;
+  $("recent-extremes").innerHTML = `
+    <div class="rex rex-min">
+      <div class="rex-ic">${ic("snowflake")}</div>
+      <div><div class="rex-label">Mini récent</div>
+        <div class="rex-val">${fmt(rmin && rmin.value)}<span class="u">°</span></div>
+        <div class="rex-when">${rmin ? fmtDayShort(rmin.day) + " · " + agoLabel(rmin.days_ago) : "—"}</div></div>
+    </div>
+    <div class="rex rex-max">
+      <div class="rex-ic">${ic("flame")}</div>
+      <div><div class="rex-label">Maxi récent</div>
+        <div class="rex-val">${fmt(rmax && rmax.value)}<span class="u">°</span></div>
+        <div class="rex-when">${rmax ? fmtDayShort(rmax.day) + " · " + agoLabel(rmax.days_ago) : "—"}</div></div>
+    </div>`;
+
+  // Record de la saison en cours
+  const sr = d.season_record;
+  if (sr) {
+    const since = fmtDayShort(sr.since);
+    $("season-record").innerHTML =
+      `<span class="sr-ic ${cold ? "cold" : "hot"}">${ic(cold ? "snowflake" : "flame")}</span>
+       ${cold ? "Le plus froid" : "Le plus chaud"} depuis le ${since} :
+       <b>${fmt(sr.value)}°</b> <span class="sr-when">(${fmtDayShort(sr.day)}, ${agoLabel(sr.days_ago)})</span>`;
+  } else $("season-record").innerHTML = "";
+
+  // Escalier des seuils : dernière fois franchi
+  const th = d.thresholds || [];
+  $("thresholds").innerHTML = th.map((t) => {
+    const recent = t.days_ago !== null && t.days_ago <= 21;
+    return `<div class="thr ${recent ? "thr-recent" : ""}">
+      <span class="thr-chip">${t.op === "<=" ? "≤" : "≥"} ${t.value}°</span>
+      <span class="thr-when">${fmtDayShort(t.day)}</span>
+      <span class="thr-ago">${agoLabel(t.days_ago)}</span>
+    </div>`;
+  }).join("");
+
+  // Dernière pluie (dans la tuile pluie)
+  const lr = d.last_rain, host = $("last-rain");
+  if (host) {
+    host.innerHTML = lr
+      ? `${ic("droplet")} Dernière pluie <b>${agoLabel(lr.days_ago)}</b> · ${fmtDayShort(lr.day)} · ${fmt(lr.mm)} mm`
+      : "";
+  }
+  paintIcons(document.getElementById("tab-overview"));
+}
+
+// Tuiles cliquables → ouvrent le détail
+document.getElementById("tab-overview").addEventListener("click", (e) => {
+  const card = e.target.closest("[data-goto]");
+  if (card) activateTab(card.dataset.goto);
+});
+
 // ---------- Démarrage ----------
 const savedTheme = localStorage.getItem("theme") || "dark";
 document.documentElement.setAttribute("data-theme", savedTheme);
@@ -1001,6 +1116,8 @@ document.documentElement.setAttribute("data-theme", savedTheme);
   await loadStations();
   loadDashboard();
   loadSeries(30);
+  loadOverviewExtra();
   loadDbStatus();
+  paintIcons(document);
 })();
 setInterval(loadDashboard, 5 * 60 * 1000);

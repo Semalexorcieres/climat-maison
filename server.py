@@ -199,6 +199,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_json(stats.wind_stats(self._station(device_id)))
             if route == "/api/stats/climate":
                 return self._send_json(stats.climate_stats(self._station(device_id)))
+            if route == "/api/overview":
+                return self._send_json(stats.overview_extra(self._station(device_id)))
             if route == "/api/search":
                 q = query.get("q", [""])[0]
                 return self._send_json(stats.search(self._station(device_id), q))

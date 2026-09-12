@@ -239,3 +239,91 @@ td.best { color: var(--ink); font-weight: 600; }
 .foot a { color: var(--ink-2); }
 .two-cols { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
 @media (max-width: 800px) { .two-cols { grid-template-columns: 1fr; } }
+
+/* ============ Icônes Lucide ============ */
+.ic { width: 18px; height: 18px; flex: 0 0 auto; vertical-align: middle; }
+.tile-head .ic { width: 15px; height: 15px; }
+.foot-ic .ic { width: 13px; height: 13px; margin-right: 3px; color: var(--min); }
+.tabs button { display: inline-flex; align-items: center; gap: 7px; }
+.tabs .ic { width: 16px; height: 16px; }
+.tabs { scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+
+/* ============ Tuiles cliquables ============ */
+.tappable { cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: transform .08s ease, border-color .15s ease; }
+.tappable:active { transform: scale(.985); }
+.tappable:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.tile { position: relative; }
+.go { position: absolute; top: 16px; right: 16px; color: var(--muted); opacity: .55; display: flex; }
+.go .ic { width: 18px; height: 18px; }
+
+/* ============ Dernière pluie (tuile pluie) ============ */
+.last-rain { display: flex; align-items: center; gap: 6px; font-size: .82rem;
+  color: var(--ink-2); margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--border); }
+.last-rain:empty { display: none; }
+.last-rain .ic { width: 15px; height: 15px; color: var(--rain); }
+.last-rain b { color: var(--ink); font-weight: 600; }
+
+/* ============ Records récents / bascule de saison ============ */
+.recent { margin-top: 22px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; position: relative; }
+.recent-head { display: flex; align-items: center; justify-content: space-between;
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 600; }
+.recent-head > span:first-child { display: flex; align-items: center; gap: 7px; }
+.recent-head .ic { width: 15px; height: 15px; }
+.recent-extremes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.rex { display: flex; gap: 12px; align-items: center; background: var(--surface-2);
+  border-radius: 12px; padding: 14px; }
+.rex-ic { display: flex; }
+.rex-ic .ic { width: 26px; height: 26px; }
+.rex-min .rex-ic { color: var(--min); }
+.rex-max .rex-ic { color: var(--max); }
+.rex-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+.rex-val { font-size: 1.9rem; font-weight: 500; line-height: 1.05; letter-spacing: -.02em; }
+.rex-val .u { font-size: 1rem; color: var(--ink-2); }
+.rex-when { font-size: .77rem; color: var(--ink-2); margin-top: 3px; }
+.season-record { margin-top: 15px; font-size: .9rem; color: var(--ink-2);
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap; line-height: 1.5; }
+.season-record:empty { display: none; }
+.season-record b { color: var(--ink); font-weight: 600; }
+.sr-when { color: var(--muted); font-size: .82rem; }
+.sr-ic { display: inline-flex; } .sr-ic .ic { width: 16px; height: 16px; }
+.sr-ic.cold { color: var(--min); } .sr-ic.hot { color: var(--max); }
+.thresholds { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
+.thr { display: flex; align-items: center; gap: 7px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font-size: .8rem; }
+.thr-chip { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.thr-when { color: var(--ink-2); }
+.thr-ago { color: var(--muted); font-size: .73rem; }
+.thr-recent { border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); }
+.thr-recent .thr-chip { color: var(--accent); }
+
+/* ============ Signature ============ */
+.foot { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.signature { font-size: .8rem; color: var(--ink-2); display: flex; align-items: center;
+  gap: 5px; letter-spacing: .03em; }
+.signature b { color: var(--ink); font-weight: 600; }
+.sig-heart { display: inline-flex; }
+.sig-heart .ic { width: 14px; height: 14px; fill: #e0245e; stroke: #e0245e; }
+
+/* ============ Optimisations iPhone ============ */
+@media (max-width: 640px) {
+  .wrap { padding: max(16px, env(safe-area-inset-top)) max(15px, env(safe-area-inset-left))
+    calc(40px + env(safe-area-inset-bottom)) max(15px, env(safe-area-inset-right)); }
+  h1 { font-size: 1.3rem; }
+  .tiles { grid-template-columns: 1fr; gap: 12px; margin-top: 18px; }
+  .tile { min-height: 0; padding: 18px; }
+  .tile-value { font-size: 2.6rem; }
+  .tile-hero .tile-value { font-size: 3.1rem; }
+  .minmax-grid { grid-template-columns: 1fr; }
+  .rex-val { font-size: 1.8rem; }
+  .tabs { margin-top: 18px; }
+  .tabs button { padding: 10px 13px; font-size: .84rem; }
+  h2 { font-size: .82rem; }
+  /* Graphe : agrandir texte et traits (le viewBox est réduit sur petit écran) */
+  .axis-text { font-size: 19px; }
+  .line-max, .line-min { stroke-width: 3; }
+  .band { opacity: .16; }
+}

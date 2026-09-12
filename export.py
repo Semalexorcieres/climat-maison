@@ -173,6 +173,8 @@ def build_data():
         s = sid(i)
         write_json(os.path.join(DOCS, "data", "dashboard", f"{s}.json"),
                    netatmo.build_dashboard(i))
+        write_json(os.path.join(DOCS, "data", "overview", f"{s}.json"),
+                   stats.overview_extra(i))
         for d in SERIES_DAYS:
             write_json(os.path.join(DOCS, "data", "series", f"{s}_{d}.json"),
                        netatmo.build_series(d, i))
