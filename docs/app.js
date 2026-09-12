@@ -568,108 +568,247 @@ function renderTemperaturePage(page, d) {
   });
 }
 
-function renderRainPage(page, d) {
-  const lastRain = d.last_rain;
-  const daysSince = d.current_dry_days;
-  page.innerHTML = `
-    <section class="stat-section">
-      <div class="stat-grid">
-        ${statTile("Dernière pluie", lastRain ? fmtDay(lastRain.day) : "—", "",
-                   lastRain ? fmt(lastRain.rain) + " mm ce jour-là" : "")}
-        ${statTile("Jours sans pluie", daysSince, "", "en cours (&lt; 0,5 mm)")}
-        ${statTile("Record de sécheresse", d.longest_dry_spell.days, " jours",
-                   "série terminée le " + fmtDay(d.longest_dry_spell.end))}
-        ${statTile("Record en 24 h", fmt(d.wettest_days[0]?.value), " mm", fmtDay(d.wettest_days[0]?.day))}
+// Barres journalières compactes (pluie, rafales…) depuis les relevés du jour
+function dayBars(host, rows, pick, color) {
+  host.innerHTML = "";
+  const vals = rows.map(pick);
+  if (!rows.length || !vals.some((v) => v != null)) { host.innerHTML = "<p class='loading'>Pas de données.</p>"; return; }
+  const W = 1000, H = 260, m = { top: 14, right: 12, bottom: 28, left: 34 };
+  const iw = W - m.left - m.right, ih = H - m.top - m.bottom;
+  const hi = Math.max(1, Math.max.apply(null, vals.filter((v) => v != null)));
+  const n = rows.length;
+  const bw = Math.max(2, (iw / n) * 0.68);
+  const x = (i) => m.left + (n === 1 ? iw / 2 : (i / (n - 1)) * iw);
+  const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  for (let t = 0; t <= 3; t++) {
+    const val = hi * t / 3, yy = m.top + ih - (val / hi) * ih;
+    line(svg, m.left, yy, W - m.right, yy, "gridline");
+    text(svg, m.left - 8, yy + 4, Math.round(val), "axis-text", "end");
+  }
+  vals.forEach((v, i) => {
+    if (v == null || v <= 0) return;
+    const bh = (v / hi) * ih;
+    const rect = document.createElementNS(NS, "rect");
+    rect.setAttribute("x", x(i) - bw / 2); rect.setAttribute("y", m.top + ih - bh);
+    rect.setAttribute("width", bw); rect.setAttribute("height", bh);
+    rect.setAttribute("rx", "1.5"); rect.setAttribute("fill", color);
+    svg.appendChild(rect);
+  });
+  const step = Math.max(1, Math.ceil(n / 6));
+  for (let i = 0; i < n; i += step) text(svg, x(i), H - 8, fmtDayShort(rows[i].day), "axis-text", "middle");
+  host.appendChild(svg);
+}
+
+function rainStatsOf(rows) {
+  let total = 0, rainy = 0, wettest = null;
+  rows.forEach((r) => {
+    if (r.rain != null) { total += r.rain; if (r.rain >= 1) rainy++; if (wettest === null || r.rain > wettest.v) wettest = { v: r.rain, day: r.day }; }
+  });
+  return { total: Math.round(total * 10) / 10, rainy, wettest };
+}
+
+function renderRainDay(host, d) {
+  const r = (lastDashboard && lastDashboard.current && lastDashboard.current.rain) || {};
+  const lr = d.last_rain;
+  host.innerHTML = `
+    <section class="day-hero">
+      <div class="day-cur">
+        <div class="label">Aujourd'hui</div>
+        <div class="v">${fmt(r.day, 1)}<span class="u">mm</span></div>
+        <div class="sub">${fmt(r.hour, 1)} mm/h en ce moment</div>
       </div>
-    </section>
-
-    <section class="stat-section">
-      ${sectionTitle("Cumul annuel")}
-      <div class="chart" id="r-yearly"></div>
-    </section>
-
-    <section class="stat-section">
-      ${sectionTitle("Bilan par année")}
+      ${lr ? `<div class="day-normal">${ic("droplet")} Dernière pluie <b>${agoLabel(lr.days_ago)}</b> · ${fmtDayShort(lr.day)} · ${fmt(lr.mm)} mm</div>` : ""}
+      <div class="day-amp">${d.current_dry_days} jour${d.current_dry_days > 1 ? "s" : ""} sans pluie en cours</div>
+    </section>`;
+  paintIcons(host);
+}
+function renderRainWeek(host, rows) {
+  const last = rows.slice(-7); const s = rainStatsOf(last);
+  host.innerHTML = `<section class="stat-section">${sectionTitle("Cette semaine (7 derniers jours)")}
+    <div class="stat-grid">
+      ${statTile("Cumul", fmt(s.total), " mm")}
+      ${statTile("Jours de pluie", s.rainy, "", "≥ 1 mm")}
+      ${statTile("Jour le plus arrosé", fmt(s.wettest && s.wettest.v), " mm", s.wettest ? fmtDayShort(s.wettest.day) : "")}
+    </div></section>
+    <section class="stat-section">${sectionTitle("Pluie jour par jour")}<div class="chart" id="r-bars"></div></section>`;
+  dayBars(host.querySelector("#r-bars"), last, (r) => r.rain, "var(--rain)");
+}
+function renderRainMonth(host, rows, d) {
+  const ym = new Date().toISOString().slice(0, 7);
+  let cur = rows.filter((r) => r.day.slice(0, 7) === ym);
+  if (cur.length < 2) cur = rows.slice(-30);
+  const s = rainStatsOf(cur);
+  const mm = ym.slice(5, 7);
+  const past = (d.monthly || []).filter((r) => r.month === mm && r.year !== ym.slice(0, 4) && r.total != null);
+  let cmp = "";
+  if (past.length) { const avg = past.reduce((a, b) => a + b.total, 0) / past.length; cmp = `<div class="day-normal">Ce mois <b>${fmt(s.total)} mm</b> · normale ${MONTHS_SHORT[parseInt(mm, 10) - 1]} ≈ ${fmt(avg)} mm</div>`; }
+  host.innerHTML = `<section class="stat-section">${sectionTitle("Ce mois-ci")}
+    <div class="stat-grid">
+      ${statTile("Cumul", fmt(s.total), " mm")}
+      ${statTile("Jours de pluie", s.rainy, "", "≥ 1 mm")}
+      ${statTile("Jour le plus arrosé", fmt(s.wettest && s.wettest.v), " mm", s.wettest ? fmtDayShort(s.wettest.day) : "")}
+    </div></section>${cmp}
+    <section class="stat-section">${sectionTitle("Pluie jour par jour")}<div class="chart" id="r-bars"></div></section>`;
+  dayBars(host.querySelector("#r-bars"), cur, (r) => r.rain, "var(--rain)");
+}
+function renderRainYear(host, d) {
+  host.innerHTML = `
+    <section class="stat-section">${sectionTitle("Cumul annuel")}<div class="chart" id="r-yearly"></div></section>
+    <section class="stat-section">${sectionTitle("Bilan par année")}
       <div class="table-wrap"><table class="data"><thead>
-        <tr><th>Année</th><th>Total</th><th>Jours de pluie (≥1 mm)</th><th>Max en 24 h</th><th>le</th></tr>
+        <tr><th>Année</th><th>Total</th><th>Jours de pluie (≥1 mm)</th><th>Max 24 h</th><th>le</th></tr>
       </thead><tbody>
         ${d.yearly.map((y) => `<tr><td>${y.year}</td><td>${fmt(y.total)} mm</td>
           <td>${y.rainy_days}</td><td>${fmt(y.max_day)} mm</td><td>${fmtDay(y.max_day_date)}</td></tr>`).join("")}
-      </tbody></table></div>
-    </section>
+      </tbody></table></div></section>
+    <section class="stat-section">${sectionTitle("Cumuls mensuels par année")}
+      <div id="r-matrix">${matrixTable(d.monthly, "total", { highlight: "max", dec: 0 })}</div></section>`;
+  barChart(host.querySelector("#r-yearly"), d.yearly.map((y) => y.year), d.yearly.map((y) => y.total), "var(--rain)", "");
+}
 
+function renderRainPage(page, d) {
+  page.innerHTML = `
+    <div class="seg" id="r-seg">
+      <button data-p="day" class="active">Jour</button>
+      <button data-p="week">Semaine</button>
+      <button data-p="month">Mois</button>
+      <button data-p="year">Année</button>
+    </div>
+    <div id="r-period"></div>
     <section class="stat-section">
-      ${sectionTitle("Cumuls mensuels par année")}
-      <div id="r-matrix">${matrixTable(d.monthly, "total", { highlight: "max", dec: 0 })}</div>
+      ${sectionTitle("Records & climatologie")}
+      <div class="stat-grid">
+        ${statTile("Record de sécheresse", d.longest_dry_spell.days, " jours", "fini le " + fmtDay(d.longest_dry_spell.end))}
+        ${statTile("Record en 24 h", fmt(d.wettest_days[0]?.value), " mm", fmtDay(d.wettest_days[0]?.day))}
+      </div>
     </section>
-
-    <section class="stat-section two-cols">
-      <div>
-        ${sectionTitle("Mois moyen (climatologie)")}
-        <div class="chart" id="r-clim"></div>
-      </div>
-      <div>
-        ${sectionTitle("Top 10 jours les plus arrosés")}
-        <div class="table-wrap"><table class="data"><thead><tr><th>Date</th><th>Pluie</th></tr></thead>
-        <tbody>${d.wettest_days.map((r) => `<tr><td>${fmtDay(r.day)}</td><td>${fmt(r.value)} mm</td></tr>`).join("")}</tbody></table></div>
-      </div>
+    <section class="stat-section">
+      ${sectionTitle("Mois moyen (climatologie)")}
+      <div class="chart" id="r-clim"></div>
     </section>`;
-
-  barChart(page.querySelector("#r-yearly"),
-    d.yearly.map((y) => y.year), d.yearly.map((y) => y.total), "var(--rain)", "");
   barChart(page.querySelector("#r-clim"),
     d.climatology.map((c) => MONTHS_SHORT[parseInt(c.month, 10) - 1]),
     d.climatology.map((c) => c.avg_total), "var(--rain)", "");
+
+  const period = page.querySelector("#r-period");
+  const renderPeriod = async (p) => {
+    if (p === "day") return renderRainDay(period, d);
+    if (p === "year") return renderRainYear(period, d);
+    period.innerHTML = "<p class='loading'>Chargement…</p>";
+    const rows = await loadDaily(currentStation);
+    if (p === "week") return renderRainWeek(period, rows);
+    if (p === "month") return renderRainMonth(period, rows, d);
+  };
+  renderPeriod("day");
+  page.querySelector("#r-seg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    page.querySelectorAll("#r-seg button").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active"); renderPeriod(b.dataset.p);
+  });
+}
+
+function windStatsOf(rows, threshold) {
+  let sum = 0, cnt = 0, maxG = null, windy = 0, north = 0;
+  rows.forEach((r) => {
+    if (r.wind_avg != null) { sum += r.wind_avg; cnt++; if (r.wind_avg >= threshold) { windy++; if (isNorth(r.wind_angle)) north++; } }
+    if (r.gust_max != null && (maxG === null || r.gust_max > maxG.v)) maxG = { v: r.gust_max, day: r.day };
+  });
+  return { avg: cnt ? Math.round(sum / cnt) : null, maxGust: maxG, windy, north };
+}
+function renderWindDay(host, d) {
+  const w = (lastDashboard && lastDashboard.current && lastDashboard.current.wind) || {};
+  host.innerHTML = `
+    <section class="day-hero">
+      <div class="day-cur">
+        <div class="label">Vent actuel</div>
+        <div class="v">${fmt(w.strength, 0)}<span class="u">km/h</span></div>
+        <div class="sub">${w.angle != null ? windCardinal(w.angle) + (isNorth(w.angle) ? " ❄️ vent du nord" : "") : ""}</div>
+      </div>
+      <div class="day-mm">
+        <div class="day-x">${ic("wind")}<div><div class="label">Rafale actuelle</div><div class="v">${fmt(w.gust, 0)}</div><div class="sub">km/h</div></div></div>
+        <div class="day-x">${ic("trending")}<div><div class="label">Rafale max du jour</div><div class="v">${fmt(w.max_today, 0)}</div><div class="sub">km/h</div></div></div>
+      </div>
+    </section>`;
+  paintIcons(host);
+}
+function windPeriod(host, rows, d, title, cmp) {
+  const s = windStatsOf(rows, d.windy_threshold);
+  host.innerHTML = `<section class="stat-section">${sectionTitle(title)}
+    <div class="stat-grid">
+      ${statTile("Vent moyen", fmt(s.avg, 0), " km/h")}
+      ${statTile("Rafale max", fmt(s.maxGust && s.maxGust.v, 0), " km/h", s.maxGust ? fmtDayShort(s.maxGust.day) : "")}
+      ${statTile("Jours de vent", s.windy, "", "dont " + s.north + " du nord")}
+    </div></section>${cmp || ""}
+    <section class="stat-section">${sectionTitle("Rafale max jour par jour")}<div class="chart" id="w-bars"></div></section>`;
+  dayBars(host.querySelector("#w-bars"), rows, (r) => r.gust_max, "var(--min)");
+}
+function renderWindYear(host, d) {
+  host.innerHTML = `
+    <section class="stat-section">${sectionTitle("Bilan par année")}
+      <div class="table-wrap"><table class="data"><thead>
+        <tr><th>Année</th><th>Vent moyen</th><th>Rafale max</th><th>le</th><th>Jours de vent</th><th>dont nord</th></tr>
+      </thead><tbody>
+        ${d.yearly.map((y) => {
+          const n = d.north_yearly.find((x) => x.year === y.year);
+          return `<tr><td>${y.year}</td><td>${fmt(y.avg)} km/h</td>
+            <td>${fmt(y.max_gust, 0)} km/h</td><td>${fmtDay(y.max_gust_day)}</td>
+            <td>${y.windy_days}</td><td class="best">${n ? n.north_days : "·"}</td></tr>`;
+        }).join("")}
+      </tbody></table></div></section>
+    <section class="stat-section two-cols">
+      <div>${sectionTitle("Rose des vents")}<div class="chart" id="w-rose" style="display:flex;justify-content:center"></div></div>
+      <div>${sectionTitle("Vent du nord — par mois")}<div class="chart" id="w-north-monthly"></div></div>
+    </section>
+    <section class="stat-section">${sectionTitle("Top 10 des plus grosses rafales")}
+      <div class="table-wrap"><table class="data"><thead><tr><th>Date</th><th>Rafale</th><th>Direction</th></tr></thead>
+      <tbody>${d.gustiest_days.map((r) => `<tr><td>${fmtDay(r.day)}</td><td>${fmt(r.value, 0)} km/h</td>
+        <td>${windCardinal(r.wind_angle)}${isNorth(r.wind_angle) ? " ❄️" : ""}</td></tr>`).join("")}</tbody></table></div></section>`;
+  windRose(host.querySelector("#w-rose"), d.rose);
+  barChart(host.querySelector("#w-north-monthly"),
+    d.north_monthly.map((m) => MONTHS_SHORT[parseInt(m.month, 10) - 1]),
+    d.north_monthly.map((m) => m.north_days), "var(--min)", "");
 }
 
 function renderWindPage(page, d) {
   const northTotal = d.north_yearly.reduce((s, y) => s + (y.north_days || 0), 0);
   const gustRec = d.gustiest_days[0];
   page.innerHTML = `
+    <div class="seg" id="w-seg">
+      <button data-p="day" class="active">Jour</button>
+      <button data-p="week">Semaine</button>
+      <button data-p="month">Mois</button>
+      <button data-p="year">Année</button>
+    </div>
+    <div id="w-period"></div>
     <section class="stat-section">
+      ${sectionTitle("Records")}
       <div class="stat-grid">
         ${statTile("Record de rafale", fmt(gustRec?.value, 0), " km/h", fmtDay(gustRec?.day))}
-        ${statTile("Jours de vent du nord", northTotal, "", "depuis le début (vent moyen ≥ " + d.windy_threshold + " km/h, secteur NO→NE)")}
+        ${statTile("Jours de vent du nord", northTotal, "", "depuis le début (secteur NO→NE)")}
       </div>
-      <p class="note">« Jour de vent » = moyenne journalière ≥ ${d.windy_threshold} km/h. « Vent du nord » = direction dominante entre 315° (NO) et 45° (NE).</p>
-    </section>
-
-    <section class="stat-section">
-      ${sectionTitle("Bilan par année")}
-      <div class="table-wrap"><table class="data"><thead>
-        <tr><th>Année</th><th>Vent moyen</th><th>Rafale max</th><th>le</th><th>Jours de vent</th><th>dont vent du nord</th></tr>
-      </thead><tbody>
-        ${d.yearly.map((y, i) => {
-          const n = d.north_yearly.find((x) => x.year === y.year);
-          return `<tr><td>${y.year}</td><td>${fmt(y.avg)} km/h</td>
-            <td>${fmt(y.max_gust, 0)} km/h</td><td>${fmtDay(y.max_gust_day)}</td>
-            <td>${y.windy_days}</td><td class="best">${n ? n.north_days : "·"}</td></tr>`;
-        }).join("")}
-      </tbody></table></div>
-    </section>
-
-    <section class="stat-section two-cols">
-      <div>
-        ${sectionTitle("Rose des vents — jours venteux par direction")}
-        <div class="chart" id="w-rose" style="display:flex;justify-content:center"></div>
-      </div>
-      <div>
-        ${sectionTitle("Vent du nord — répartition mensuelle")}
-        <div class="chart" id="w-north-monthly"></div>
-      </div>
-    </section>
-
-    <section class="stat-section">
-      ${sectionTitle("Top 10 des plus grosses rafales")}
-      <div class="table-wrap"><table class="data"><thead><tr><th>Date</th><th>Rafale</th><th>Direction</th></tr></thead>
-      <tbody>${d.gustiest_days.map((r) => `<tr><td>${fmtDay(r.day)}</td><td>${fmt(r.value, 0)} km/h</td>
-        <td>${windCardinal(r.wind_angle)}${isNorth(r.wind_angle) ? " ❄️" : ""}</td></tr>`).join("")}</tbody></table></div>
+      <p class="note">« Jour de vent » = moyenne journalière ≥ ${d.windy_threshold} km/h. « Vent du nord » = direction entre 315° (NO) et 45° (NE).</p>
     </section>`;
 
-  windRose(page.querySelector("#w-rose"), d.rose);
-  barChart(page.querySelector("#w-north-monthly"),
-    d.north_monthly.map((m) => MONTHS_SHORT[parseInt(m.month, 10) - 1]),
-    d.north_monthly.map((m) => m.north_days), "var(--min)", "");
+  const period = page.querySelector("#w-period");
+  const renderPeriod = async (p) => {
+    if (p === "day") return renderWindDay(period, d);
+    if (p === "year") return renderWindYear(period, d);
+    period.innerHTML = "<p class='loading'>Chargement…</p>";
+    const rows = await loadDaily(currentStation);
+    if (p === "week") return windPeriod(period, rows.slice(-7), d, "Cette semaine (7 derniers jours)");
+    if (p === "month") {
+      const ym = new Date().toISOString().slice(0, 7);
+      let cur = rows.filter((r) => r.day.slice(0, 7) === ym);
+      if (cur.length < 2) cur = rows.slice(-30);
+      return windPeriod(period, cur, d, "Ce mois-ci");
+    }
+  };
+  renderPeriod("day");
+  page.querySelector("#w-seg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    page.querySelectorAll("#w-seg button").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active"); renderPeriod(b.dataset.p);
+  });
 }
 
 function renderClimatePage(page, d) {
